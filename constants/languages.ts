@@ -17,8 +17,12 @@ export interface LanguageOption {
   phoneticGreeting: string;
   /** Primary accent badge */
   tag: string;
+  /** Short 2-3 char language badge */
+  badge: string;
   /** TTS language code fallback */
   speechCode: string;
+  /** Localized action phrase for CTA button */
+  actionText: string;
 }
 
 export const SUPPORTED_LANGUAGES: LanguageOption[] = [
@@ -26,11 +30,13 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
     id: 'en',
     name: 'English',
     nativeName: 'English',
-    region: 'Standard / Ghana',
+    region: 'Standard Ghana',
     greeting: 'Welcome to Mbaala. Tap to continue.',
     phoneticGreeting: 'Welcome to Mbaala',
     tag: 'DEFAULT',
+    badge: 'EN',
     speechCode: 'en-US',
+    actionText: 'Start Scanning',
   },
   {
     id: 'dag',
@@ -40,7 +46,9 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
     greeting: 'Ansulaamu alaykum. A yaa Mbaala.',
     phoneticGreeting: 'An-su-laa-mu a-lay-kum',
     tag: 'NORTH',
+    badge: 'DAG',
     speechCode: 'en-GH',
+    actionText: 'Pillim Womika',
   },
   {
     id: 'hau',
@@ -50,7 +58,9 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
     greeting: 'Sannu da zuwa Mbaala. Zabi yarenka.',
     phoneticGreeting: 'San-nu da zu-wa',
     tag: 'SAHEL',
+    badge: 'HAU',
     speechCode: 'ha',
+    actionText: 'Fara Bincike',
   },
   {
     id: 'gur',
@@ -60,6 +70,8 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
     greeting: 'Solege Mbaala. N de baala bɔŋa.',
     phoneticGreeting: 'So-le-ge Mbaa-la',
     tag: 'UPPER EAST',
+    badge: 'GUR',
     speechCode: 'en-GH',
+    actionText: 'Pilligɛ Nɛŋa',
   },
 ];

@@ -20,6 +20,7 @@ import {
   LanguageCard,
 } from '@/components/onboarding';
 import {
+  LanguageIllustration,
   SlideOneIllustration,
   SlideThreeIllustration,
   SlideTwoIllustration,
@@ -88,6 +89,7 @@ export default function OnboardingScreen() {
   const [showLanguageSelect, setShowLanguageSelect] = useState(false);
   const [selectedLang, setSelectedLang] = useState<LanguageOption>(SUPPORTED_LANGUAGES[0]);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [playingLangId, setPlayingLangId] = useState<string | null>(null);
 
   const flatListRef = useRef<FlatList>(null);
   const theme = THEME;
@@ -110,10 +112,28 @@ export default function OnboardingScreen() {
     try {
       Speech.stop();
       setIsSpeaking(false);
+      setPlayingLangId(null);
     } catch {
       // Fallback
     }
   };
+
+  const handlePlayLanguageAudio = (lang: LanguageOption) => {
+    try {
+      Speech.stop();
+      setPlayingLangId(lang.id);
+      Speech.speak(lang.greeting, {
+        language: lang.speechCode,
+        pitch: 1.0,
+        rate: 0.92,
+        onDone: () => setPlayingLangId(null),
+        onError: () => setPlayingLangId(null),
+      });
+    } catch {
+      setPlayingLangId(null);
+    }
+  };
+
 
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -146,6 +166,19 @@ export default function OnboardingScreen() {
     setShowLanguageSelect(true);
   };
 
+  const handleBackToOnboarding = () => {
+    triggerHaptic();
+    stopAudio();
+    setShowLanguageSelect(false);
+    // Explicitly align FlatList with activeIndex so image & indicator match perfectly
+    setTimeout(() => {
+      flatListRef.current?.scrollToIndex({
+        index: activeIndex,
+        animated: false,
+      });
+    }, 40);
+  };
+
   const speakSlideAudio = (text: string) => {
     try {
       Speech.stop();
@@ -162,80 +195,6 @@ export default function OnboardingScreen() {
     }
   };
 
-  // =========================================================================
-  // DEDICATED LANGUAGE SELECTION (AFTER ALL ONBOARDING SLIDES)
-  // =========================================================================
-  if (showLanguageSelect) {
-    return (
-      <SafeAreaView edges={['top', 'bottom']} style={[styles.langSafeArea, { backgroundColor: theme.canvas }]}>
-        <StatusBar barStyle="dark-content" backgroundColor={theme.canvas} />
-
-        <ScrollView
-          contentContainerStyle={styles.langScroll}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Header */}
-          <View style={styles.langHeader}>
-            <View style={[styles.langStepPill, { backgroundColor: theme.primary }]}>
-              <Text style={styles.langStepPillText}>FINAL STEP</Text>
-            </View>
-            <Text style={[styles.langHeading, { color: theme.text }]}>Choose Your Language</Text>
-            <Text style={[styles.langSubheading, { color: theme.subtext }]}>
-              Select the dialect you want Mbaala to speak when diagnosing your livestock.
-            </Text>
-          </View>
-
-          {/* Cards */}
-          <View style={styles.langCards}>
-            {SUPPORTED_LANGUAGES.map((lang) => (
-              <LanguageCard
-                key={lang.id}
-                language={lang}
-                isSelected={selectedLang.id === lang.id}
-                onSelect={setSelectedLang}
-                isDark={false}
-              />
-            ))}
-          </View>
-
-          {/* Unified Solid Action Button */}
-          <TouchableOpacity
-            activeOpacity={0.88}
-            onPress={() => {
-              triggerHaptic('success');
-              stopAudio();
-              try {
-                Speech.speak(selectedLang.greeting, {
-                  language: selectedLang.speechCode,
-                });
-              } catch {
-                // Fallback
-              }
-              alert(`Selected Language: ${selectedLang.name} (${selectedLang.nativeName})\n\nReady for Phase 5: Camera Screen.`);
-            }}
-            style={[styles.langContinueButton, { backgroundColor: theme.primary, shadowColor: theme.primary }]}
-            accessibilityRole="button"
-          >
-            <Text style={styles.langContinueButtonText}>
-              Start Scanning • Pillim Womika
-            </Text>
-            <Svg width={20} height={20} viewBox="0 0 20 20" fill="none">
-              <Path
-                fillRule="evenodd"
-                clipRule="evenodd"
-                d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z"
-                fill="#FFFFFF"
-              />
-            </Svg>
-          </TouchableOpacity>
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  // =========================================================================
-  // SOLID SWIPABLE ONBOARDING SCREENS (FRESH LIGHT GREEN & CREATIVE PALETTES)
-  // =========================================================================
   const isLastSlide = activeIndex === SLIDES.length - 1;
   const illustrationHeight = Math.min(SCREEN_HEIGHT * 0.36, 250);
   const illustrationWidth = Math.min(SCREEN_WIDTH - 48, 300);
@@ -244,104 +203,201 @@ export default function OnboardingScreen() {
     <SafeAreaView edges={['top', 'bottom']} style={[styles.safeArea, { backgroundColor: theme.canvas }]}>
       <StatusBar barStyle="dark-content" backgroundColor={theme.canvas} />
 
-      {/* Top Bar: Clean Skip Button on Top Right */}
-      <View style={styles.topBar}>
-        <View style={styles.topBarSpacer} />
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={handleSkip}
-          style={[styles.skipButton, { backgroundColor: theme.skipBg }]}
-          accessibilityLabel="Skip onboarding"
-        >
-          <Text style={[styles.skipText, { color: theme.skipText }]}>Skip</Text>
-        </TouchableOpacity>
-      </View>
+      {/* ========================================================================= */}
+      {/* 1. ONBOARDING SCREEN (KEPT MOUNTED TO PRESERVE SCROLL POSITION)           */}
+      {/* ========================================================================= */}
+      <View style={[styles.screenWrap, { display: showLanguageSelect ? 'none' : 'flex' }]}>
+        {/* Top Bar: Clean Skip Button on Top Right */}
+        <View style={styles.topBar}>
+          <View style={styles.topBarSpacer} />
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleSkip}
+            style={[styles.skipButton, { backgroundColor: theme.skipBg }]}
+            accessibilityLabel="Skip onboarding"
+          >
+            <Text style={[styles.skipText, { color: theme.skipText }]}>Skip</Text>
+          </TouchableOpacity>
+        </View>
 
-      {/* Horizontal Swipable Slide List */}
-      <FlatList
-        ref={flatListRef}
-        data={SLIDES}
-        keyExtractor={(item) => item.id}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        bounces={false}
-        onMomentumScrollEnd={handleScroll}
-        getItemLayout={(_, index) => ({
-          length: SCREEN_WIDTH,
-          offset: SCREEN_WIDTH * index,
-          index,
-        })}
-        renderItem={({ item }) => (
-          <View style={styles.solidSlideScreen}>
-            {/* Visual Upper Area: Centered gracefully in the middle */}
-            <View style={styles.illustrationWrap}>
-              {item.renderIllustration(illustrationWidth, illustrationHeight, theme.primary, theme.accent)}
-            </View>
-
-            {/* Unified Bottom Content & Controls */}
-            <View style={styles.bottomContentWrap}>
-              {/* Pagination Dots */}
-              <View style={styles.dotsRow}>
-                {SLIDES.map((slide, i) => {
-                  const isActive = i === activeIndex;
-                  return (
-                    <View
-                      key={slide.id}
-                      style={[
-                        styles.dot,
-                        isActive
-                          ? [styles.activeDot, { backgroundColor: theme.primary }]
-                          : [styles.inactiveDot, { backgroundColor: theme.dotInactive }],
-                      ]}
-                    />
-                  );
-                })}
+        {/* Horizontal Swipable Slide List */}
+        <FlatList
+          ref={flatListRef}
+          data={SLIDES}
+          keyExtractor={(item) => item.id}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          bounces={false}
+          initialScrollIndex={activeIndex}
+          getItemLayout={(_, index) => ({
+            length: SCREEN_WIDTH,
+            offset: SCREEN_WIDTH * index,
+            index,
+          })}
+          onScrollToIndexFailed={(info) => {
+            setTimeout(() => {
+              flatListRef.current?.scrollToIndex({
+                index: info.index,
+                animated: false,
+              });
+            }, 50);
+          }}
+          onMomentumScrollEnd={handleScroll}
+          renderItem={({ item }) => (
+            <View style={styles.solidSlideScreen}>
+              {/* Visual Upper Area: Centered gracefully in the middle */}
+              <View style={styles.illustrationWrap}>
+                {item.renderIllustration(illustrationWidth, illustrationHeight, theme.primary, theme.accent)}
               </View>
 
-              {/* Title & Description */}
-              <Text style={[styles.headline, { color: theme.text }]}>{item.title}</Text>
-              <Text style={[styles.description, { color: theme.subtext }]}>{item.description}</Text>
+              {/* Unified Bottom Content & Controls */}
+              <View style={styles.bottomContentWrap}>
+                {/* Pagination Dots */}
+                <View style={styles.dotsRow}>
+                  {SLIDES.map((slide, i) => {
+                    const isActive = i === activeIndex;
+                    return (
+                      <View
+                        key={slide.id}
+                        style={[
+                          styles.dot,
+                          isActive
+                            ? [styles.activeDot, { backgroundColor: theme.primary }]
+                            : [styles.inactiveDot, { backgroundColor: theme.dotInactive }],
+                        ]}
+                      />
+                    );
+                  })}
+                </View>
 
-              {/* Audio Speaker Pill for Non-Literate Users */}
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => speakSlideAudio(item.spokenAudio)}
-                style={[styles.audioPill, { backgroundColor: theme.primaryLight }]}
-              >
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                  <Path d="M11 5L6 9H2V15H6L11 19V5Z" fill={theme.primary} />
-                  <Path d="M15.54 8.46C16.5 9.42 17 10.7 17 12C17 13.3 16.5 14.58 15.54 15.54" stroke={theme.primary} strokeWidth="2" strokeLinecap="round" />
-                </Svg>
-                <Text style={[styles.audioPillText, { color: theme.primary }]}>
-                  {isSpeaking ? 'Playing voice...' : 'Tap to listen'}
-                </Text>
-              </TouchableOpacity>
+                {/* Title & Description */}
+                <Text style={[styles.headline, { color: theme.text }]}>{item.title}</Text>
+                <Text style={[styles.description, { color: theme.subtext }]}>{item.description}</Text>
 
-              {/* Solid Integrated Next / Get Started Button */}
-              <TouchableOpacity
-                activeOpacity={0.88}
-                onPress={handleNext}
-                style={[styles.solidNextButton, { backgroundColor: theme.primary, shadowColor: theme.primary }]}
-                accessibilityRole="button"
-                accessibilityLabel={isLastSlide ? 'Get Started' : 'Next screen'}
-              >
-                <Text style={styles.solidNextButtonText}>
-                  {isLastSlide ? 'Get Started' : 'Next'}
-                </Text>
-                <Svg width={20} height={20} viewBox="0 0 20 20" fill="none">
-                  <Path
-                    fillRule="evenodd"
-                    clipRule="evenodd"
-                    d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z"
-                    fill="#FFFFFF"
-                  />
-                </Svg>
-              </TouchableOpacity>
+                {/* Audio Speaker Pill for Non-Literate Users */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => speakSlideAudio(item.spokenAudio)}
+                  style={[styles.audioPill, { backgroundColor: theme.primaryLight }]}
+                >
+                  <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                    <Path d="M11 5L6 9H2V15H6L11 19V5Z" fill={theme.primary} />
+                    <Path d="M15.54 8.46C16.5 9.42 17 10.7 17 12C17 13.3 16.5 14.58 15.54 15.54" stroke={theme.primary} strokeWidth="2" strokeLinecap="round" />
+                  </Svg>
+                  <Text style={[styles.audioPillText, { color: theme.primary }]}>
+                    {isSpeaking ? 'Playing voice...' : 'Tap to listen'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Solid Integrated Next / Get Started Button */}
+                <TouchableOpacity
+                  activeOpacity={0.88}
+                  onPress={handleNext}
+                  style={[styles.solidNextButton, { backgroundColor: theme.primary, shadowColor: theme.primary }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={isLastSlide ? 'Get Started' : 'Next screen'}
+                >
+                  <Text style={styles.solidNextButtonText}>
+                    {isLastSlide ? 'Get Started' : 'Next'}
+                  </Text>
+                  {/* Full Bold Solid Arrow */}
+                  <Svg width={22} height={22} viewBox="0 0 24 24" fill="#FFFFFF">
+                    <Path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
+                  </Svg>
+                </TouchableOpacity>
+              </View>
             </View>
+          )}
+        />
+      </View>
+
+      {/* ========================================================================= */}
+      {/* 2. DEDICATED LANGUAGE SELECTION (CONNECTED & VISUALLY RICH)                */}
+      {/* ========================================================================= */}
+      <View style={[styles.screenWrap, { display: showLanguageSelect ? 'flex' : 'none' }]}>
+        {/* Top Bar: Clean Left Back Button */}
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleBackToOnboarding}
+            style={styles.langBackButton}
+            accessibilityLabel="Back to onboarding slides"
+          >
+            <Svg width={20} height={20} viewBox="0 0 20 20" fill="none">
+              <Path
+                fillRule="evenodd"
+                clipRule="evenodd"
+                d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
+                fill="#0F172A"
+              />
+            </Svg>
+          </TouchableOpacity>
+          <View style={styles.topBarSpacer} />
+        </View>
+
+        {/* Centered Scroll Content */}
+        <ScrollView
+          contentContainerStyle={styles.langScrollContent}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          {/* Custom Language Illustration */}
+          <View style={styles.langIllustrationWrap}>
+            <LanguageIllustration
+              width={Math.min(SCREEN_WIDTH - 64, 200)}
+              height={100}
+              primaryColor={theme.primary}
+              accentColor={theme.accent}
+            />
           </View>
-        )}
-      />
+
+          {/* Header */}
+          <View style={styles.langHeader}>
+            <Text style={styles.langHeading}>Choose Your Language</Text>
+            <Text style={styles.langSubheading}>
+              Select your dialect to hear spoken instructions.
+            </Text>
+          </View>
+
+          {/* 4 Clean Language Cards */}
+          <View style={styles.langCards}>
+            {SUPPORTED_LANGUAGES.map((lang) => (
+              <LanguageCard
+                key={lang.id}
+                language={lang}
+                isSelected={selectedLang.id === lang.id}
+                isPlaying={playingLangId === lang.id}
+                onPlayAudio={handlePlayLanguageAudio}
+                onSelect={(selected) => {
+                  setSelectedLang(selected);
+                  handlePlayLanguageAudio(selected);
+                }}
+              />
+            ))}
+          </View>
+        </ScrollView>
+
+        {/* Solid Action Button at Bottom */}
+        <View style={styles.langBottomWrap}>
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={() => {
+              triggerHaptic('success');
+              stopAudio();
+              alert(`Selected Language: ${selectedLang.name} (${selectedLang.nativeName})\n\nReady for Phase 5: Real-time Eye Finder Camera Screen.`);
+            }}
+            style={[styles.langContinueButton, { backgroundColor: theme.primary, shadowColor: theme.primary }]}
+            accessibilityRole="button"
+          >
+            <Text style={styles.langContinueButtonText}>Continue</Text>
+            {/* Full Bold Solid Arrow */}
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="#FFFFFF">
+              <Path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
+            </Svg>
+          </TouchableOpacity>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -453,42 +509,51 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: -0.2,
   },
-  langSafeArea: {
+  screenWrap: {
     flex: 1,
   },
-  langScroll: {
-    padding: 24,
-    paddingBottom: 40,
+  langBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  langScrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 6,
+    paddingBottom: 16,
+  },
+  langIllustrationWrap: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
   },
   langHeader: {
-    marginBottom: 24,
-  },
-  langStepPill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  langStepPillText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
+    marginBottom: 16,
   },
   langHeading: {
-    fontSize: 30,
+    fontSize: 26,
     fontWeight: '900',
-    letterSpacing: -0.8,
+    letterSpacing: -0.6,
+    color: '#0F172A',
+    marginBottom: 4,
   },
   langSubheading: {
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: '500',
-    marginTop: 8,
+    color: '#64748B',
   },
   langCards: {
-    marginBottom: 24,
+    width: '100%',
+    marginBottom: 8,
+  },
+  langBottomWrap: {
+    paddingHorizontal: 24,
+    paddingBottom: 24,
   },
   langContinueButton: {
     width: '100%',

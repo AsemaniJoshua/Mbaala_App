@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Platform,
   Pressable,
@@ -8,7 +8,6 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import * as Speech from 'expo-speech';
 import Svg, { Path } from 'react-native-svg';
 import { LanguageOption } from '@/constants/languages';
 
@@ -16,38 +15,18 @@ export interface LanguageCardProps {
   language: LanguageOption;
   isSelected: boolean;
   onSelect: (lang: LanguageOption) => void;
-  isDark?: boolean;
+  isPlaying?: boolean;
+  onPlayAudio?: (lang: LanguageOption) => void;
 }
 
 export const LanguageCard: React.FC<LanguageCardProps> = ({
   language,
   isSelected,
   onSelect,
+  isPlaying = false,
+  onPlayAudio,
 }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
-
-  const cardBg = isSelected ? '#ECFDF5' : '#FFFFFF';
-  const borderColor = isSelected ? '#10B981' : '#E2E8F0';
-  const titleColor = '#0F172A';
-  const subtitleColor = '#64748B';
-
-  const speakGreeting = () => {
-    try {
-      Speech.stop();
-      setIsPlaying(true);
-      Speech.speak(language.greeting, {
-        language: language.speechCode,
-        pitch: 1.0,
-        rate: 0.92,
-        onDone: () => setIsPlaying(false),
-        onError: () => setIsPlaying(false),
-      });
-    } catch {
-      setIsPlaying(false);
-    }
-  };
-
-  const handlePressCard = () => {
+  const triggerHaptic = () => {
     if (Platform.OS !== 'web') {
       try {
         Haptics.selectionAsync();
@@ -55,117 +34,129 @@ export const LanguageCard: React.FC<LanguageCardProps> = ({
         // Fallback
       }
     }
+  };
+
+  const handleCardPress = () => {
+    triggerHaptic();
     onSelect(language);
-    speakGreeting();
+  };
+
+  const handleSpeakerPress = (e: any) => {
+    e.stopPropagation?.();
+    triggerHaptic();
+    if (onPlayAudio) {
+      onPlayAudio(language);
+    }
   };
 
   return (
     <Pressable
-      onPress={handlePressCard}
+      onPress={handleCardPress}
       accessibilityRole="button"
       accessibilityLabel={`${language.nativeName}, ${language.name}. Tap to select.`}
       style={({ pressed }) => [
         styles.card,
         {
-          backgroundColor: cardBg,
-          borderColor: borderColor,
+          backgroundColor: isSelected ? '#ECFDF5' : '#FFFFFF',
+          borderColor: isSelected ? '#10B981' : '#E5E7EB',
+          borderWidth: isSelected ? 1.5 : 1,
           transform: [{ scale: pressed ? 0.985 : 1 }],
           shadowColor: isSelected ? '#10B981' : '#000000',
           shadowOpacity: isSelected ? 0.12 : 0.03,
-          shadowRadius: isSelected ? 10 : 4,
+          shadowRadius: isSelected ? 6 : 3,
           elevation: isSelected ? 3 : 1,
         },
       ]}
     >
-      <View style={styles.leftContent}>
-        {/* Region Tag Pill */}
-        <View
+      {/* Left Language Code Badge */}
+      <View
+        style={[
+          styles.badgeWrap,
+          {
+            backgroundColor: isSelected ? '#D1FAE5' : '#F3F4F6',
+          },
+        ]}
+      >
+        <Text
           style={[
-            styles.tagPill,
+            styles.badgeText,
             {
-              backgroundColor: isSelected ? '#D1FAE5' : '#F1F5F9',
+              color: isSelected ? '#047857' : '#6B7280',
             },
           ]}
         >
-          <Text
-            style={[
-              styles.tagText,
-              {
-                color: isSelected ? '#047857' : '#64748B',
-              },
-            ]}
-          >
-            {language.tag}
-          </Text>
-        </View>
-
-        {/* Native Language Name (Bold & Large) */}
-        <Text style={[styles.primaryName, { color: titleColor }]}>
-          {language.nativeName}
-        </Text>
-
-        {/* English Name & Region Description */}
-        <Text style={[styles.regionName, { color: subtitleColor }]}>
-          {language.name} • {language.region}
+          {language.badge}
         </Text>
       </View>
 
-      <View style={styles.rightActions}>
-        {/* Speaker Button with Soundwave SVG */}
+      {/* Middle: Native Name & Region / Greeting */}
+      <View style={styles.textWrap}>
+        <Text style={styles.nativeName}>{language.nativeName}</Text>
+        <Text numberOfLines={1} style={styles.subtext}>
+          {language.region} • “{language.phoneticGreeting}”
+        </Text>
+      </View>
+
+      {/* Right: Speaker Audio Button & Check Ring */}
+      <View style={styles.actionsWrap}>
+        {/* Speaker Button */}
         <TouchableOpacity
-          activeOpacity={0.75}
-          onPress={(e) => {
-            e.stopPropagation?.();
-            speakGreeting();
-          }}
+          activeOpacity={0.7}
+          onPress={handleSpeakerPress}
           accessibilityLabel={`Listen to ${language.name} sample greeting`}
           style={[
             styles.speakerButton,
             {
-              backgroundColor: isPlaying
-                ? '#10B981'
-                : isSelected
-                ? '#D1FAE5'
-                : '#F1F5F9',
+              backgroundColor: isPlaying ? '#10B981' : '#F3F4F6',
             },
           ]}
         >
-          <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-            <Path
-              d="M11 5L6 9H2V15H6L11 19V5Z"
-              fill={isPlaying ? '#FFFFFF' : isSelected ? '#047857' : '#64748B'}
-            />
-            <Path
-              d="M15.54 8.46C16.5 9.42 17 10.7 17 12C17 13.3 16.5 14.58 15.54 15.54"
-              stroke={isPlaying ? '#FFFFFF' : isSelected ? '#047857' : '#64748B'}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-            <Path
-              d="M19.07 4.93C20.94 6.8 22 9.35 22 12C22 14.65 20.94 17.2 19.07 19.07"
-              stroke={isPlaying ? '#FFFFFF' : isSelected ? '#047857' : '#64748B'}
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </Svg>
+          {isPlaying ? (
+            /* Equalizer Waveform Bars */
+            <View style={styles.equalizerRow}>
+              <View style={[styles.equalizerBar, { height: 9 }]} />
+              <View style={[styles.equalizerBar, { height: 15 }]} />
+              <View style={[styles.equalizerBar, { height: 7 }]} />
+            </View>
+          ) : (
+            /* Crisp Speaker Icon */
+            <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+              <Path
+                d="M11 5L6 9H2V15H6L11 19V5Z"
+                fill={isSelected ? '#059669' : '#6B7280'}
+              />
+              <Path
+                d="M15.54 8.46C16.5 9.42 17 10.7 17 12C17 13.3 16.5 14.58 15.54 15.54"
+                stroke={isSelected ? '#059669' : '#6B7280'}
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <Path
+                d="M19.07 4.93C20.94 6.8 22 9.35 22 12C22 14.65 20.94 17.2 19.07 19.07"
+                stroke={isSelected ? '#059669' : '#6B7280'}
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </Svg>
+          )}
         </TouchableOpacity>
 
-        {/* Selection Check Ring */}
+        {/* Selection Check Circle */}
         <View
           style={[
-            styles.checkRing,
+            styles.checkCircle,
             {
-              borderColor: isSelected ? '#10B981' : '#CBD5E1',
+              borderColor: isSelected ? '#10B981' : '#D1D5DB',
               backgroundColor: isSelected ? '#10B981' : 'transparent',
             },
           ]}
         >
           {isSelected && (
-            <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+            <Svg width={11} height={11} viewBox="0 0 24 24" fill="none">
               <Path
                 d="M5 13L9 17L19 7"
                 stroke="#FFFFFF"
-                strokeWidth="3.5"
+                strokeWidth="3.2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -181,56 +172,67 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 18,
+    marginBottom: 10,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  badgeWrap: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    borderWidth: 1.5,
-    marginBottom: 12,
-    shadowOffset: { width: 0, height: 3 },
-  },
-  leftContent: {
-    flex: 1,
-    paddingRight: 14,
-  },
-  tagPill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    marginBottom: 6,
-  },
-  tagText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-  primaryName: {
-    fontSize: 19,
-    fontWeight: '900',
-    letterSpacing: -0.4,
-  },
-  regionName: {
-    fontSize: 13,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  rightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  speakerButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  checkRing: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  textWrap: {
+    flex: 1,
+    paddingHorizontal: 12,
+  },
+  nativeName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  subtext: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  actionsWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  speakerButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  equalizerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  equalizerBar: {
+    width: 2.5,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 1.25,
+  },
+  checkCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
