@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 140" width="540" height="140" fill="none">
+  <defs>
+    <!-- Horn gradient: Savannah Emerald to Vibrant Jade -->
+    <linearGradient id="logoHornLeft" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+    <linearGradient id="logoHornRight" x1="80%" y1="0%" x2="20%" y2="100%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+
+    <!-- Eye Diagnostic Scanner Gradient (FAMACHA spectrum) -->
+    <linearGradient id="logoFamachaIris" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F59E0B"/>
+      <stop offset="50%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+
+    <!-- Vitality Node (Red FAMACHA alert indicator) -->
+    <radialGradient id="logoVitalityPulse" cx="40%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#F87171"/>
+      <stop offset="100%" stop-color="#DC2626"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Group: Emblem Mark (Scaled and positioned at left x:10..130) -->
+  <g transform="translate(10, 10) scale(0.6)">
+    <!-- Left Sweeping Horn -->
+    <path d="M100 44 C82 32 58 34 40 52 C24 68 22 92 34 108 C42 118 56 122 66 116 C76 110 78 94 70 86 C64 80 54 80 48 86 C44 76 46 64 56 56 C68 46 86 48 100 58 Z"
+          fill="url(#logoHornLeft)"/>
+
+    <!-- Right Sweeping Horn -->
+    <path d="M100 44 C118 32 142 34 160 52 C176 68 178 92 166 108 C158 118 144 122 134 116 C124 110 122 94 130 86 C136 80 146 80 152 86 C156 76 154 64 144 56 C132 46 114 48 100 58 Z"
+          fill="url(#logoHornRight)"/>
+
+    <!-- Animal Facial Wedge -->
+    <path d="M100 68 C88 84 80 108 84 136 C86 148 94 160 100 164 C106 160 114 148 116 136 C120 108 112 84 100 68 Z"
+          fill="#064E3B"/>
+
+    <!-- FAMACHA Diagnostic Eye Contour -->
+    <ellipse cx="100" cy="112" rx="26" ry="16" fill="#0F172A" stroke="#10B981" stroke-width="3.5"/>
+
+    <!-- Glowing Iris / Lens Target -->
+    <circle cx="100" cy="112" r="10.5" fill="url(#logoFamachaIris)"/>
+
+    <!-- AI Lens Pupil / Optical Center -->
+    <circle cx="100" cy="112" r="5" fill="#FFFFFF"/>
+
+    <!-- Vitality Blood Pulse Dot -->
+    <circle cx="100" cy="150" r="4.5" fill="url(#logoVitalityPulse)"/>
+
+    <!-- Precision Scanner Crosshairs -->
+    <path d="M100 90 L100 94 M100 130 L100 134 M70 112 L74 112 M126 112 L130 112"
+          stroke="#34D399" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Typography: Wordmark "Mbaala" -->
+  <text x="145" y="76" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="52" font-weight="900" letter-spacing="-1.5" fill="#064E3B">
+    Mbaala
+  </text>
+
+  <!-- Green Dot on Wordmark "a" accent -->
+  <circle cx="340" cy="46" r="6" fill="#10B981"/>
+
+  <!-- Subtitle / Category Badge -->
+  <rect x="148" y="90" width="186" height="24" rx="12" fill="#E6F4EA"/>
+  <text x="160" y="106" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="800" letter-spacing="2" fill="#059669">
+    LIVESTOCK HEALTH AI
+  </text>
+
+  <!-- FAMACHA Tri-Color Indicator Strip (Green, Yellow, Red) -->
+  <circle cx="350" cy="102" r="4" fill="#10B981"/>
+  <circle cx="364" cy="102" r="4" fill="#F59E0B"/>
+  <circle cx="378" cy="102" r="4" fill="#EF4444"/>
+</svg>

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" fill="none">
+  <!-- Mbaala Master Brand Mark: Option A (Modern 'M' + Ram Horns) -->
+  <!-- Left Horn & Left Stem of "M" -->
+  <path
+    d="M 50 76 
+       C 45 52 38 34 32 24 
+       C 24 12 8 20 8 36 
+       C 8 50 20 60 30 52
+       C 34 49 34 43 30 43
+       C 24 43 17 38 18 32
+       C 19 24 28 20 33 28
+       C 38 36 43 54 48 76 Z"
+    fill="#0F4C3A"
+  />
+
+  <!-- Right Horn & Right Stem of "M" -->
+  <path
+    d="M 50 76 
+       C 55 52 62 34 68 24 
+       C 76 12 92 20 92 36 
+       C 92 50 80 60 70 52
+       C 66 49 66 43 70 43
+       C 76 43 83 38 82 32
+       C 81 24 72 20 67 28
+       C 62 36 57 54 52 76 Z"
+    fill="#0F4C3A"
+  />
+
+  <!-- Center Crown / Face Contour -->
+  <path
+    d="M 45 36 
+       C 45 36 47 48 50 56 
+       C 53 48 55 36 55 36 
+       Z"
+    fill="#0F4C3A"
+  />
+
+  <!-- Vitality Focus Dot -->
+  <circle cx="50" cy="62" r="3" fill="#10B981" />
+</svg>
