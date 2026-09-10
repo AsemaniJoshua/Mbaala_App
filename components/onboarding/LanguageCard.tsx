@@ -196,9 +196,9 @@ const styles = StyleSheet.create({
   },
   nativeName: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: -0.2,
+    fontWeight: '600',
+    color: '#334155',
+    letterSpacing: -0.1,
   },
   subtext: {
     fontSize: 12,
