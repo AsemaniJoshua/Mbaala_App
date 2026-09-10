@@ -2,7 +2,6 @@ import React, { useRef, useState } from 'react';
 import {
   Dimensions,
   FlatList,
-  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -38,6 +37,8 @@ import {
   CameraPermissionCard,
   CameraReticle,
   TactileShutter,
+  InspectionResultModal,
+  FamachaReferenceModal,
 } from '@/components/scanner';
 import { LanguageOption, SUPPORTED_LANGUAGES } from '@/constants/languages';
 
@@ -113,6 +114,7 @@ export default function MainScanScreen() {
     selectedLanguage,
     setSelectedLanguage,
     addScanRecord,
+    getNextTagNumber,
   } = useApp();
 
   // Onboarding & Language Selection Local State
@@ -130,23 +132,38 @@ export default function MainScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [torchOn, setTorchOn] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<'Goat' | 'Sheep'>('Goat');
-  const [isEyeDetected] = useState(false);
+  const [isEyeDetected, setIsEyeDetected] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [pipelineStage, setPipelineStage] = useState<PipelineStage>('idle');
   const [latestAiResult, setLatestAiResult] = useState<TwoStageInferenceResult | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showFamachaModal, setShowFamachaModal] = useState(false);
 
-  // Stable guidance instruction for animal eyelid alignment (localized, no flickering)
+
+
+  // Clean, concise single-line reticle guidance reacting to language, animal, and eyelid alignment
   const getReticleInstruction = () => {
+    if (isEyeDetected) {
+      switch (selectedLanguage.id) {
+        case 'dag':
+          return 'Nini pɔɣu maa zani viɛnyɛla';
+        case 'hau':
+          return 'Fatar ido tana tsakiya';
+        case 'gur':
+          return 'Nini pɔka la zani sukuura';
+        default:
+          return 'Eyelid in position • Hold still';
+      }
+    }
     switch (selectedLanguage.id) {
       case 'dag':
-        return 'Kpa nini pɔɣu maa gbunni';
+        return `Kpa ${selectedAnimal === 'Goat' ? 'buɣa' : 'piɛɣu'} nini pɔɣu`;
       case 'hau':
-        return 'Nuna fatar idon dabba a tsakiya';
+        return `Nuna fatar idon ${selectedAnimal === 'Goat' ? 'akuya' : 'rago'}`;
       case 'gur':
-        return 'Zɛri nini pɔka la sukuura la poan';
+        return `Zaleni ${selectedAnimal === 'Goat' ? 'bua' : 'pɛka'} nini pɔka`;
       default:
-        return 'Align lower eyelid in frame';
+        return `Align ${selectedAnimal.toLowerCase()} lower eyelid`;
     }
   };
 
@@ -281,24 +298,49 @@ export default function MainScanScreen() {
 
   const handleToggleAnimal = () => {
     triggerHaptic();
+    setIsEyeDetected(false);
     setSelectedAnimal((prev) => (prev === 'Goat' ? 'Sheep' : 'Goat'));
+  };
+
+  const handleOpenFamachaInfo = () => {
+    triggerHaptic('selection');
+    stopAudio();
+    setShowFamachaModal(true);
   };
 
   const handleCapture = async () => {
     if (isCapturing) return;
     triggerHaptic('heavy');
     setIsCapturing(true);
+    setIsEyeDetected(true);
     stopAudio();
 
-    const randomTag = `#${Math.floor(100 + Math.random() * 900)}`;
+    const consistentTag = await getNextTagNumber(selectedAnimal);
+    let photoUri = '';
 
     try {
-      // Execute 2-stage AI pipeline: Finder (YOLOv8) + Judge (MobileNetV3)
+      // 1. Capture real live camera frame
+      if (cameraRef.current) {
+        try {
+          const photo = await cameraRef.current.takePictureAsync({
+            quality: 0.85,
+            skipProcessing: true,
+          });
+          if (photo?.uri) {
+            photoUri = photo.uri;
+            console.log('[Mbaala Scanner] Captured live frame URI:', photoUri);
+          }
+        } catch (camErr) {
+          console.log('[Mbaala Scanner] Live frame capture fallback:', camErr);
+        }
+      }
+
+      // 2. Execute 2-stage AI pipeline: Finder (YOLOv8) + Judge (MobileNetV3)
       const result = await runTwoStageInference(
-        '',
+        photoUri,
         selectedAnimal,
         selectedLanguage.id,
-        randomTag,
+        consistentTag,
         (stage) => setPipelineStage(stage)
       );
 
@@ -329,17 +371,6 @@ export default function MainScanScreen() {
         famachaScore: result.judge.famachaScore,
         confidence: result.judge.confidence,
       });
-
-      // Play localized dialect clinical diagnosis audio
-      try {
-        Speech.speak(result.judge.localizedSpeech, {
-          language: selectedLanguage.speechCode,
-          pitch: 1.0,
-          rate: 0.92,
-        });
-      } catch {
-        // Fallback
-      }
 
       setShowPreviewModal(true);
     } catch {
@@ -565,12 +596,26 @@ export default function MainScanScreen() {
         flash={torchOn ? 'on' : 'off'}
       />
 
-      {/* 3B. Camera Center Alignment Reticle */}
-      <View style={styles.reticleOverlay} pointerEvents="none">
-        <CameraReticle
-          isEyeDetected={isEyeDetected}
-          instructionText={getReticleInstruction()}
-        />
+      {/* 3B. Camera Center Alignment Reticle with Tap-to-Align Simulation */}
+      <View style={styles.reticleOverlay} pointerEvents="box-none">
+        <TouchableOpacity
+          activeOpacity={0.88}
+          onPress={() => {
+            triggerHaptic('selection');
+            setIsEyeDetected((prev) => !prev);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={
+            isEyeDetected
+              ? 'Eyelid in position. Tap to re-align.'
+              : 'Tap to align eyelid.'
+          }
+        >
+          <CameraReticle
+            isEyeDetected={isEyeDetected}
+            instructionText={getReticleInstruction()}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* 3C. Top HUD Overlay: Audio Prompt + Clean Mbaala Brand + Torch Button */}
@@ -652,25 +697,14 @@ export default function MainScanScreen() {
         {/* Right: Quick FAMACHA Color Chart Reference Button (Clean Info Icon) */}
         <TouchableOpacity
           activeOpacity={0.8}
-          onPress={() => {
-            triggerHaptic();
-            try {
-              Speech.speak('FAMACHA checks eye redness. Red is healthy. White is severe anemia.', {
-                language: selectedLanguage.speechCode,
-                pitch: 1.0,
-                rate: 0.95,
-              });
-            } catch {
-              // Fallback
-            }
-          }}
+          onPress={handleOpenFamachaInfo}
           style={styles.chartTipButton}
           accessibilityRole="button"
           accessibilityLabel="Hear FAMACHA color reference advice"
         >
           <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-            <Circle cx="12" cy="12" r="9" stroke="rgba(255, 255, 255, 0.6)" strokeWidth="1.8" />
-            <Path d="M12 8H12.01M12 11V16" stroke="#10B981" strokeWidth="2.2" strokeLinecap="round" />
+            <Circle cx="12" cy="12" r="9" stroke="rgba(255, 255, 255, 0.7)" strokeWidth="2" />
+            <Path d="M12 8H12.01M12 11V16" stroke="#10B981" strokeWidth="2.4" strokeLinecap="round" />
           </Svg>
         </TouchableOpacity>
       </View>
@@ -689,206 +723,29 @@ export default function MainScanScreen() {
         </View>
       )}
 
-      {/* 3E. Real Two-Stage AI Inspection Results Bottom Sheet Modal */}
-      <Modal
-        visible={showPreviewModal && !!latestAiResult}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowPreviewModal(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalDragHandle} />
+      {/* 3E. Illiterate-Friendly Two-Stage AI Inspection Results Bottom Sheet Modal */}
+      <InspectionResultModal
+        visible={showPreviewModal}
+        result={latestAiResult}
+        selectedLanguage={selectedLanguage}
+        onClose={() => {
+          setShowPreviewModal(false);
+          setIsEyeDetected(false);
+        }}
+        onViewFlock={() => {
+          setShowPreviewModal(false);
+          setIsEyeDetected(false);
+          router.navigate('/history');
+        }}
+      />
 
-            {/* Header: Tag + Breed + Duration */}
-            <View style={styles.modalHeaderRow}>
-              <View>
-                <Text style={styles.modalTitle}>
-                  {latestAiResult?.animalBreed} {latestAiResult?.animalTag}
-                </Text>
-                <Text style={styles.modalSubtitle}>
-                  Scanned {latestAiResult?.timestamp} • {latestAiResult?.totalDurationMs}ms total latency
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.modalSuccessBadge,
-                  { backgroundColor: latestAiResult?.judge.badgeBg || '#ECFDF5' },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.modalSuccessBadgeText,
-                    { color: latestAiResult?.judge.badgeColor || '#059669' },
-                  ]}
-                >
-                  FAMACHA {latestAiResult?.judge.famachaScore}
-                </Text>
-              </View>
-            </View>
-
-            <ScrollView style={{ maxHeight: SCREEN_HEIGHT * 0.52 }} showsVerticalScrollIndicator={false}>
-              {/* Stage 1: Eye Finder (YOLOv8n) Card */}
-              <View style={styles.aiStageCard}>
-                <View style={styles.aiStageHeader}>
-                  <Text style={styles.aiStageTitle}>MODEL 1 • EYE FINDER (YOLOv8n)</Text>
-                  <Text style={styles.aiStageConfidence}>
-                    {((latestAiResult?.finder.confidence || 0) * 100).toFixed(1)}% Match
-                  </Text>
-                </View>
-                <Text style={styles.aiStageDesc}>
-                  Detected livestock eye coordinates and extracted eyelid mucosa crop with 15% padding in{' '}
-                  {latestAiResult?.finder.inferenceTimeMs}ms.
-                </Text>
-                <View style={styles.coordBadgesRow}>
-                  <View style={styles.coordBadge}>
-                    <Text style={styles.coordBadgeLabel}>Center:</Text>
-                    <Text style={styles.coordBadgeVal}>
-                      {((latestAiResult?.finder.box.x || 0) * 100).toFixed(0)}%,{' '}
-                      {((latestAiResult?.finder.box.y || 0) * 100).toFixed(0)}%
-                    </Text>
-                  </View>
-                  <View style={styles.coordBadge}>
-                    <Text style={styles.coordBadgeLabel}>15% Margin:</Text>
-                    <Text style={styles.coordBadgeVal}>
-                      {((latestAiResult?.finder.paddedCropBox.width || 0) * 100).toFixed(0)}% ×{' '}
-                      {((latestAiResult?.finder.paddedCropBox.height || 0) * 100).toFixed(0)}%
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Stage 2: FAMACHA Judge (MobileNetV3) Card */}
-              <View
-                style={[
-                  styles.aiStageCard,
-                  { borderColor: latestAiResult?.judge.badgeColor || '#E2E8F0' },
-                ]}
-              >
-                <View style={styles.aiStageHeader}>
-                  <Text style={styles.aiStageTitle}>MODEL 2 • COLOR JUDGE (MobileNetV3)</Text>
-                  <Text
-                    style={[
-                      styles.aiStageConfidence,
-                      { color: latestAiResult?.judge.badgeColor || '#059669' },
-                    ]}
-                  >
-                    {((latestAiResult?.judge.confidence || 0) * 100).toFixed(1)}%
-                  </Text>
-                </View>
-
-                {/* FAMACHA Color Spectrum Bar with Active Marker */}
-                <View style={styles.famachaColorBar}>
-                  <View style={[styles.famachaSegment, { backgroundColor: '#DC2626' }]} />
-                  <View style={[styles.famachaSegment, { backgroundColor: '#EA580C' }]} />
-                  <View style={[styles.famachaSegment, { backgroundColor: '#F59E0B' }]} />
-                  <View style={[styles.famachaSegment, { backgroundColor: '#FCA5A5' }]} />
-                  <View style={[styles.famachaSegment, { backgroundColor: '#F1F5F9' }]} />
-                </View>
-
-                <View style={styles.famachaScaleLabels}>
-                  <Text style={styles.famachaScaleLabel}>1. Optimal (Red)</Text>
-                  <Text style={styles.famachaScaleLabel}>3. Borderline</Text>
-                  <Text style={styles.famachaScaleLabel}>5. Fatal (White)</Text>
-                </View>
-
-                {/* Softmax Probability Distribution */}
-                <View style={styles.probRow}>
-                  <View style={styles.probItem}>
-                    <Text style={styles.probLabel}>Healthy</Text>
-                    <Text style={[styles.probVal, { color: '#10B981' }]}>
-                      {((latestAiResult?.judge.probabilities.Green_Healthy || 0) * 100).toFixed(0)}%
-                    </Text>
-                  </View>
-                  <View style={styles.probItem}>
-                    <Text style={styles.probLabel}>Borderline</Text>
-                    <Text style={[styles.probVal, { color: '#F59E0B' }]}>
-                      {((latestAiResult?.judge.probabilities.Yellow_Borderline || 0) * 100).toFixed(0)}%
-                    </Text>
-                  </View>
-                  <View style={styles.probItem}>
-                    <Text style={styles.probLabel}>Severe</Text>
-                    <Text style={[styles.probVal, { color: '#EF4444' }]}>
-                      {((latestAiResult?.judge.probabilities.Red_Severe || 0) * 100).toFixed(0)}%
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Localized Dialect Clinical Audio Advice Pill */}
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => {
-                  if (latestAiResult?.judge.localizedSpeech) {
-                    try {
-                      Speech.stop();
-                      Speech.speak(latestAiResult.judge.localizedSpeech, {
-                        language: selectedLanguage.speechCode,
-                        pitch: 1.0,
-                        rate: 0.92,
-                      });
-                    } catch {
-                      // Fallback
-                    }
-                  }
-                }}
-                style={[
-                  styles.diagnosisPill,
-                  { backgroundColor: latestAiResult?.judge.badgeBg || '#ECFDF5' },
-                ]}
-              >
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path d="M11 5L6 9H2V15H6L11 19V5Z" fill={latestAiResult?.judge.badgeColor || '#059669'} />
-                  <Path
-                    d="M15.54 8.46C16.5 9.42 17 10.7 17 12C17 13.3 16.5 14.58 15.54 15.54"
-                    stroke={latestAiResult?.judge.badgeColor || '#059669'}
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                  />
-                </Svg>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={[
-                      styles.diagnosisDialect,
-                      { color: latestAiResult?.judge.badgeColor || '#059669' },
-                    ]}
-                  >
-                    {selectedLanguage.name} Clinical Voice Advice (Tap to Replay):
-                  </Text>
-                  <Text style={styles.diagnosisText}>
-                    {latestAiResult?.judge.localizedSpeech}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </ScrollView>
-
-            {/* Action Buttons */}
-            <View style={styles.modalActionsRow}>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => setShowPreviewModal(false)}
-                style={styles.modalSecondaryButton}
-              >
-                <Text style={styles.modalSecondaryButtonText}>Scan Next Animal</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.88}
-                onPress={() => {
-                  setShowPreviewModal(false);
-                  router.navigate('/history');
-                }}
-                style={styles.modalPrimaryButton}
-              >
-                <Text style={styles.modalPrimaryButtonText}>View Flock</Text>
-                <Svg width={18} height={18} viewBox="0 0 24 24" fill="#FFFFFF">
-                  <Path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z" />
-                </Svg>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* 3F. Language-Specific FAMACHA Reference Guide Modal (Interactive Veterinary Card) */}
+      <FamachaReferenceModal
+        visible={showFamachaModal}
+        selectedLanguage={selectedLanguage}
+        selectedAnimal={selectedAnimal}
+        onClose={() => setShowFamachaModal(false)}
+      />
     </View>
   );
 }
@@ -1187,143 +1044,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.2)',
   },
 
-  // Inspection Modal Styles
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 28,
-  },
-  modalDragHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#CBD5E1',
-    alignSelf: 'center',
-    marginBottom: 16,
-  },
-  modalHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: -0.3,
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  modalSuccessBadge: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  modalSuccessBadgeText: {
-    color: '#059669',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  famachaStripWrap: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  famachaStripTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  famachaColorBar: {
-    height: 16,
-    borderRadius: 8,
-    flexDirection: 'row',
-    overflow: 'hidden',
-    marginBottom: 6,
-  },
-  famachaSegment: {
-    flex: 1,
-  },
-  famachaScaleLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  famachaScaleLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  modalNoteBox: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 20,
-  },
-  modalNoteText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#047857',
-    fontWeight: '500',
-  },
-  modalActionsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalSecondaryButton: {
-    flex: 1,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalSecondaryButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  modalPrimaryButton: {
-    flex: 1.2,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#10B981',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    shadowColor: '#10B981',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  modalPrimaryButtonText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-
-  // AI Pipeline Scanning & Diagnostic Styles
+  // AI Pipeline Scanning HUD Overlay
   aiScanningBanner: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 110 : 85,
@@ -1359,110 +1080,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     letterSpacing: -0.2,
-  },
-  aiStageCard: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-  },
-  aiStageHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  aiStageTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#475569',
-    letterSpacing: 0.6,
-  },
-  aiStageConfidence: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#10B981',
-  },
-  aiStageDesc: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#334155',
-    fontWeight: '500',
-    marginBottom: 8,
-  },
-  coordBadgesRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  coordBadge: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  coordBadgeLabel: {
-    fontSize: 10,
-    color: '#64748B',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  coordBadgeVal: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  probRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-    gap: 8,
-  },
-  probItem: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  probLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  probVal: {
-    fontSize: 14,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  diagnosisPill: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 14,
-    borderRadius: 14,
-    gap: 10,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
-  },
-  diagnosisDialect: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-    marginBottom: 3,
-    textTransform: 'uppercase',
-  },
-  diagnosisText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#0F172A',
-    fontWeight: '600',
   },
 });

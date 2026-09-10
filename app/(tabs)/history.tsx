@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  ActivityIndicator,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -8,25 +10,48 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle, Path } from 'react-native-svg';
+import { useRouter } from 'expo-router';
+import Svg, { Path } from 'react-native-svg';
 import * as Speech from 'expo-speech';
-import { useApp } from '@/context/AppContext';
+import * as Haptics from 'expo-haptics';
 
-interface ScanRecord {
-  id: string;
-  tag: string;
-  animal: 'Goat' | 'Sheep';
-  status: 'Healthy' | 'Warning' | 'Critical';
-  statusColor: string;
-  statusBg: string;
-  statusLabel: string;
-  timeAgo: string;
-  speechText: string;
-}
+import { ScanRecord, useApp } from '@/context/AppContext';
+import {
+  DeleteConfirmModal,
+  FlockEmptyState,
+  FlockRecordCard,
+  FlockStatsCard,
+  HealthFilterType,
+} from '@/components/flock';
+
+type AnimalFilterType = 'All' | 'Goat' | 'Sheep';
 
 export default function HistoryScreen() {
-  const { selectedLanguage, scanRecords } = useApp();
+  const router = useRouter();
+  const {
+    selectedLanguage,
+    scanRecords,
+    isLoadingRecords,
+    deleteScanRecord,
+    clearAllScanRecords,
+  } = useApp();
 
+  // Local Filter State
+  const [healthFilter, setHealthFilter] = useState<HealthFilterType>('All');
+  const [animalFilter, setAnimalFilter] = useState<AnimalFilterType>('All');
+
+  // Deletion Modal State
+  const [deleteModalState, setDeleteModalState] = useState<{
+    visible: boolean;
+    mode: 'single' | 'all';
+    targetRecord?: ScanRecord | null;
+  }>({
+    visible: false,
+    mode: 'single',
+    targetRecord: null,
+  });
+
+  // Native Voice Playback
   const handlePlayDiagnosis = (record: ScanRecord) => {
     try {
       Speech.stop();
@@ -36,10 +61,50 @@ export default function HistoryScreen() {
         rate: 0.92,
       });
     } catch {
-      // Fallback
+      // Speech fallback
     }
   };
 
+  // Open Single Delete Confirmation
+  const handlePromptDeleteRecord = (record: ScanRecord) => {
+    setDeleteModalState({
+      visible: true,
+      mode: 'single',
+      targetRecord: record,
+    });
+  };
+
+  // Open Bulk Clear Confirmation
+  const handlePromptClearAll = () => {
+    if (scanRecords.length === 0) return;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    } catch {}
+    setDeleteModalState({
+      visible: true,
+      mode: 'all',
+      targetRecord: null,
+    });
+  };
+
+  // Perform Deletion
+  const handleConfirmDelete = async () => {
+    if (deleteModalState.mode === 'single' && deleteModalState.targetRecord) {
+      await deleteScanRecord(deleteModalState.targetRecord.id);
+    } else if (deleteModalState.mode === 'all') {
+      await clearAllScanRecords();
+    }
+    setDeleteModalState({ visible: false, mode: 'single', targetRecord: null });
+  };
+
+  // Filter Records
+  const filteredRecords = scanRecords.filter((record) => {
+    const matchesHealth = healthFilter === 'All' || record.status === healthFilter;
+    const matchesAnimal = animalFilter === 'All' || record.animal === animalFilter;
+    return matchesHealth && matchesAnimal;
+  });
+
+  // Calculate Overall Statistics
   const healthyCount = scanRecords.filter((r) => r.status === 'Healthy').length;
   const warningCount = scanRecords.filter((r) => r.status === 'Warning').length;
   const criticalCount = scanRecords.filter((r) => r.status === 'Critical').length;
@@ -52,107 +117,141 @@ export default function HistoryScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Screen Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Flock Records</Text>
-          <Text style={styles.subtitle}>
-            Daily FAMACHA anemia inspection history for your herd.
-          </Text>
-        </View>
-
-        {/* Daily Tally Summary Card */}
-        <View style={styles.tallyCard}>
-          <View style={styles.tallyTopRow}>
-            <View>
-              <Text style={styles.tallyMainNumber}>{scanRecords.length}</Text>
-              <Text style={styles.tallySubLabel}>Animals Checked Today</Text>
-            </View>
-            <View style={styles.tallyBadge}>
-              <Text style={styles.tallyBadgeText}>DAILY LOG</Text>
-            </View>
+        {/* Screen Header & Clear Action */}
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Flock Records</Text>
+            <Text style={styles.subtitle}>
+              Offline FAMACHA inspection history saved on device.
+            </Text>
           </View>
 
-          <View style={styles.divider} />
+          {scanRecords.length > 0 && (
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={handlePromptClearAll}
+              style={styles.clearAllBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Clear all flock records"
+            >
+              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M3 6H5H21M19 6V20C19 21.1046 18.1046 22 17 22H7C5.89543 22 5 21.1046 5 20V6M8 6V4C8 2.89543 8.89543 2 10 2H14C15.1046 2 16 2.89543 16 4V6"
+                  stroke="#EF4444"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+              <Text style={styles.clearAllText}>Clear All</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
-          {/* 3 Status Columns */}
-          <View style={styles.metricsRow}>
-            <View style={styles.metricCol}>
-              <View style={[styles.metricDot, { backgroundColor: '#10B981' }]} />
-              <Text style={styles.metricVal}>{healthyCount}</Text>
-              <Text style={styles.metricLabel}>Healthy</Text>
-            </View>
-            <View style={styles.metricCol}>
-              <View style={[styles.metricDot, { backgroundColor: '#F59E0B' }]} />
-              <Text style={styles.metricVal}>{warningCount}</Text>
-              <Text style={styles.metricLabel}>Monitor</Text>
-            </View>
-            <View style={styles.metricCol}>
-              <View style={[styles.metricDot, { backgroundColor: '#EF4444' }]} />
-              <Text style={styles.metricVal}>{criticalCount}</Text>
-              <Text style={styles.metricLabel}>Drenched</Text>
-            </View>
+        {/* Loading Indicator for Initial Local Storage Hydration */}
+        {isLoadingRecords ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="small" color="#10B981" />
+            <Text style={styles.loadingText}>Loading records from phone storage...</Text>
           </View>
-        </View>
+        ) : (
+          <>
+            {/* 1. Herd Health Summary Stats Card */}
+            <FlockStatsCard
+              totalCount={scanRecords.length}
+              healthyCount={healthyCount}
+              warningCount={warningCount}
+              criticalCount={criticalCount}
+              selectedFilter={healthFilter}
+              onSelectFilter={(f) => {
+                try {
+                  Haptics.selectionAsync();
+                } catch {}
+                setHealthFilter(f);
+              }}
+            />
 
-        {/* Section Title */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Eye Scans</Text>
-          <Text style={styles.sectionCount}>{scanRecords.length} entries</Text>
-        </View>
+            {/* 2. Animal Breed Filter Segmented Bar */}
+            <View style={styles.animalFilterRow}>
+              {(['All', 'Goat', 'Sheep'] as AnimalFilterType[]).map((animal) => {
+                const isSelected = animalFilter === animal;
+                const count =
+                  animal === 'All'
+                    ? scanRecords.length
+                    : scanRecords.filter((r) => r.animal === animal).length;
+                return (
+                  <TouchableOpacity
+                    key={animal}
+                    activeOpacity={0.8}
+                    onPress={() => {
+                      try {
+                        Haptics.selectionAsync();
+                      } catch {}
+                      setAnimalFilter(animal);
+                    }}
+                    style={[
+                      styles.animalFilterPill,
+                      isSelected && styles.animalFilterPillActive,
+                    ]}
+                  >
+                    <Text style={styles.animalFilterEmoji}>
+                      {animal === 'Goat' ? '🐐' : animal === 'Sheep' ? '🐑' : '🐾'}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.animalFilterText,
+                        isSelected && styles.animalFilterTextActive,
+                      ]}
+                    >
+                      {animal === 'All' ? 'All Breeds' : `${animal}s`} ({count})
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
-        {/* Records List */}
-        <View style={styles.recordsList}>
-          {scanRecords.map((record) => (
-            <View key={record.id} style={styles.recordItem}>
-              {/* Left Avatar Orb */}
-              <View style={[styles.recordAvatar, { backgroundColor: record.statusBg }]}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path
-                    d="M12 4.5C7 4.5 2.73 7.61 1 12C2.73 16.39 7 19.5 12 19.5C17 19.5 21.27 16.39 23 12C21.27 7.61 17 4.5 12 4.5Z"
-                    stroke={record.statusColor}
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+            {/* 3. Section Title & Current Results Count */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Inspection History</Text>
+              <Text style={styles.sectionCount}>
+                Showing {filteredRecords.length} of {scanRecords.length}
+              </Text>
+            </View>
+
+            {/* 4. Records List or Clean Empty State */}
+            {filteredRecords.length > 0 ? (
+              <View style={styles.recordsList}>
+                {filteredRecords.map((record) => (
+                  <FlockRecordCard
+                    key={record.id}
+                    record={record}
+                    onPlayAudio={handlePlayDiagnosis}
+                    onDelete={handlePromptDeleteRecord}
                   />
-                  <Circle cx="12" cy="12" r="3" fill={record.statusColor} />
-                </Svg>
+                ))}
               </View>
-
-              {/* Middle Info */}
-              <View style={styles.recordInfo}>
-                <View style={styles.recordTagRow}>
-                  <Text style={styles.recordTag}>{record.animal} {record.tag}</Text>
-                  <Text style={styles.recordTime}>{record.timeAgo}</Text>
-                </View>
-                <View
-                  style={[
-                    styles.statusPill,
-                    { backgroundColor: record.statusBg, borderColor: record.statusColor },
-                  ]}
-                >
-                  <Text style={[styles.statusPillText, { color: record.statusColor }]}>
-                    {record.statusLabel}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Right Audio Replay Button */}
-              <TouchableOpacity
-                activeOpacity={0.75}
-                onPress={() => handlePlayDiagnosis(record)}
-                style={[styles.audioReplayBtn, { backgroundColor: record.statusBg }]}
-                accessibilityRole="button"
-                accessibilityLabel={`Hear diagnosis for ${record.animal} ${record.tag}`}
-              >
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                  <Path d="M11 5L6 9H2V15H6L11 19V5Z" fill={record.statusColor} />
-                  <Path d="M15.54 8.46C16.5 9.42 17 10.7 17 12C17 13.3 16.5 14.58 15.54 15.54" stroke={record.statusColor} strokeWidth="2" strokeLinecap="round" />
-                </Svg>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
+            ) : (
+              <FlockEmptyState
+                isFiltered={scanRecords.length > 0}
+                onResetFilters={() => {
+                  setHealthFilter('All');
+                  setAnimalFilter('All');
+                }}
+                onScanNow={() => router.navigate('/')}
+              />
+            )}
+          </>
+        )}
       </ScrollView>
+
+      {/* 5. Safe Deletion Confirmation Bottom Sheet Dialog */}
+      <DeleteConfirmModal
+        visible={deleteModalState.visible}
+        mode={deleteModalState.mode}
+        targetRecord={deleteModalState.targetRecord}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModalState({ visible: false, mode: 'single', targetRecord: null })}
+      />
     </SafeAreaView>
   );
 }
@@ -165,176 +264,108 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 110, // Extra clearance for the floating bottom tab bar
+    paddingBottom: Platform.OS === 'ios' ? 120 : 100, // Safe clearance above floating tabs
   },
-  header: {
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 20,
+    gap: 12,
   },
   title: {
     fontSize: 28,
     fontWeight: '900',
     color: '#0F172A',
     letterSpacing: -0.6,
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '500',
-    color: '#64748B',
-  },
-  tallyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 22,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 24,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
-  },
-  tallyTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  tallyMainNumber: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: '#0F172A',
-    letterSpacing: -0.6,
-  },
-  tallySubLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#64748B',
-    marginTop: 2,
-  },
-  tallyBadge: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  tallyBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#047857',
-    letterSpacing: 0.5,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 14,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  metricCol: {
-    alignItems: 'center',
-  },
-  metricDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
     marginBottom: 4,
   },
-  metricVal: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
+  subtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
+    color: '#64748B',
   },
-  metricLabel: {
-    fontSize: 11,
+  clearAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    marginTop: 4,
+  },
+  clearAllText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#EF4444',
+  },
+  loadingWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 13,
     fontWeight: '600',
     color: '#64748B',
-    marginTop: 2,
+  },
+  animalFilterRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 20,
+  },
+  animalFilterPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 10,
+    borderRadius: 16,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  animalFilterPillActive: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
+  },
+  animalFilterEmoji: {
+    fontSize: 15,
+  },
+  animalFilterText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  animalFilterTextActive: {
+    color: '#047857',
+    fontWeight: '800',
   },
   sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
+    paddingHorizontal: 2,
   },
   sectionTitle: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#1E293B',
+    color: '#0F172A',
     letterSpacing: -0.3,
   },
   sectionCount: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#94A3B8',
+    color: '#64748B',
   },
   recordsList: {
-    width: '100%',
-  },
-  recordItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: 14,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 10,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  recordAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  recordInfo: {
-    flex: 1,
-  },
-  recordTagRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-    paddingRight: 8,
-  },
-  recordTag: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  recordTime: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#94A3B8',
-  },
-  statusPill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2.5,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  statusPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  audioReplayBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
+    marginBottom: 8,
   },
 });
