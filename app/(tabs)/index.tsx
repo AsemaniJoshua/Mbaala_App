@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
@@ -106,6 +106,7 @@ const SLIDES: SlideItem[] = [
 
 export default function MainScanScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     hasCompletedOnboarding,
     completeOnboarding,
@@ -125,6 +126,7 @@ export default function MainScanScreen() {
   const theme = THEME;
 
   // Camera & AI State
+  const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [torchOn, setTorchOn] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<'Goat' | 'Sheep'>('Goat');
@@ -269,8 +271,12 @@ export default function MainScanScreen() {
 
   // Camera Actions
   const handleToggleTorch = () => {
-    triggerHaptic();
-    setTorchOn((prev) => !prev);
+    triggerHaptic('heavy');
+    setTorchOn((prev) => {
+      const next = !prev;
+      console.log('[Mbaala Scanner] Hardware torch toggled:', next ? 'ON' : 'OFF');
+      return next;
+    });
   };
 
   const handleToggleAnimal = () => {
@@ -552,9 +558,11 @@ export default function MainScanScreen() {
 
       {/* 3A. Fullscreen Camera View */}
       <CameraView
+        ref={cameraRef}
         style={StyleSheet.absoluteFillObject}
         facing="back"
         enableTorch={torchOn}
+        flash={torchOn ? 'on' : 'off'}
       />
 
       {/* 3B. Camera Center Alignment Reticle */}
@@ -566,8 +574,14 @@ export default function MainScanScreen() {
       </View>
 
       {/* 3C. Top HUD Overlay: Audio Prompt + Clean Mbaala Brand + Torch Button */}
-      <SafeAreaView edges={['top']} style={styles.topHudContainer} pointerEvents="box-none">
-        <View style={styles.topHudRow}>
+      <View
+        pointerEvents="box-none"
+        style={[
+          styles.topHudContainer,
+          { paddingTop: insets.top + (Platform.OS === 'android' ? 12 : 6) },
+        ]}
+      >
+        <View style={styles.topHudRow} pointerEvents="box-none">
           {/* Left: Dialect Spoken Audio Button */}
           <TouchableOpacity
             activeOpacity={0.8}
@@ -596,25 +610,27 @@ export default function MainScanScreen() {
 
           {/* Right: Torch / Flashlight Button */}
           <TouchableOpacity
-            activeOpacity={0.8}
+            activeOpacity={0.7}
+            hitSlop={{ top: 18, bottom: 18, left: 18, right: 18 }}
             onPress={handleToggleTorch}
             style={[styles.hudIconButton, torchOn && styles.hudIconButtonActive]}
             accessibilityRole="button"
-            accessibilityLabel="Toggle camera torch flashlight"
+            accessibilityLabel={torchOn ? 'Turn off camera flashlight' : 'Turn on camera flashlight'}
+            accessibilityState={{ selected: torchOn }}
           >
-            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
               <Path
                 d="M13 2L3 14H12L11 22L21 10H12L13 2Z"
-                stroke={torchOn ? '#0F172A' : '#FFFFFF'}
-                strokeWidth="2"
+                stroke={torchOn ? '#D97706' : '#FFFFFF'}
+                strokeWidth="2.2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                fill={torchOn ? '#FBBF24' : 'none'}
+                fill={torchOn ? '#F59E0B' : 'none'}
               />
             </Svg>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
 
       {/* 3D. Bottom Viewfinder Controls (Floating comfortably above modern bottom tab bar) */}
       <View style={styles.bottomControlsArea} pointerEvents="box-none">
@@ -1063,14 +1079,16 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 10,
+    zIndex: 999,
+    elevation: 20,
   },
   topHudRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'android' ? 14 : 8,
+    zIndex: 1000,
+    elevation: 21,
   },
   hudAudioPill: {
     flexDirection: 'row',
@@ -1107,18 +1125,23 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   hudIconButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: 'rgba(15, 23, 42, 0.75)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
   },
   hudIconButtonActive: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#FFFFFF',
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 8,
   },
 
   // Bottom Viewfinder Controls
