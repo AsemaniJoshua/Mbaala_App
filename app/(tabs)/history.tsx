@@ -379,9 +379,9 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: '900',
-    color: '#0F172A',
-    letterSpacing: -0.6,
+    fontWeight: '700',
+    color: '#1E293B',
+    letterSpacing: -0.4,
     marginBottom: 4,
   },
   subtitle: {

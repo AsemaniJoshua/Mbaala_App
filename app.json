@@ -5,6 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F4C3A"
+    },
     "scheme": "mbaalaapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -31,11 +36,11 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
+          "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#0F4C3A",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#0A3327"
           }
         }
       ],
