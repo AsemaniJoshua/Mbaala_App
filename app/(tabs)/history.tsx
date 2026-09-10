@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import * as Speech from 'expo-speech';
@@ -28,6 +28,7 @@ type AnimalFilterType = 'All' | 'Goat' | 'Sheep';
 
 export default function HistoryScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     selectedLanguage,
     scanRecords,
@@ -37,8 +38,8 @@ export default function HistoryScreen() {
   } = useApp();
 
   // Local Filter State
-  const [healthFilter, setHealthFilter] = useState<HealthFilterType>('All');
   const [animalFilter, setAnimalFilter] = useState<AnimalFilterType>('All');
+  const [healthFilter, setHealthFilter] = useState<HealthFilterType>('All');
 
   // Deletion Modal State
   const [deleteModalState, setDeleteModalState] = useState<{
@@ -97,24 +98,37 @@ export default function HistoryScreen() {
     setDeleteModalState({ visible: false, mode: 'single', targetRecord: null });
   };
 
-  // Filter Records
-  const filteredRecords = scanRecords.filter((record) => {
-    const matchesHealth = healthFilter === 'All' || record.status === healthFilter;
-    const matchesAnimal = animalFilter === 'All' || record.animal === animalFilter;
-    return matchesHealth && matchesAnimal;
+  // 1. Records scoped to active animal breed
+  const breedScopedRecords = scanRecords.filter((record) => {
+    return animalFilter === 'All' || record.animal === animalFilter;
   });
 
-  // Calculate Overall Statistics
-  const healthyCount = scanRecords.filter((r) => r.status === 'Healthy').length;
-  const warningCount = scanRecords.filter((r) => r.status === 'Warning').length;
-  const criticalCount = scanRecords.filter((r) => r.status === 'Critical').length;
+  // 2. Final records matching both breed and health filter
+  const filteredRecords = breedScopedRecords.filter((record) => {
+    return healthFilter === 'All' || record.status === healthFilter;
+  });
+
+  // 3. Dynamic counts for the stats summary card
+  const totalInScope = breedScopedRecords.length;
+  const healthyCount = breedScopedRecords.filter((r) => r.status === 'Healthy').length;
+  const warningCount = breedScopedRecords.filter((r) => r.status === 'Warning').length;
+  const criticalCount = breedScopedRecords.filter((r) => r.status === 'Critical').length;
+
+  // Breed counts for the segmented bar
+  const goatCount = scanRecords.filter((r) => r.animal === 'Goat').length;
+  const sheepCount = scanRecords.filter((r) => r.animal === 'Sheep').length;
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safeArea}>
+    <View style={styles.screenContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#FBFDF9" />
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: insets.top + (Platform.OS === 'android' ? 24 : 18),
+          },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Screen Header & Clear Action */}
@@ -122,7 +136,7 @@ export default function HistoryScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>Flock Records</Text>
             <Text style={styles.subtitle}>
-              Offline FAMACHA inspection history saved on device.
+              Offline clinical health history saved on device
             </Text>
           </View>
 
@@ -134,7 +148,7 @@ export default function HistoryScreen() {
               accessibilityRole="button"
               accessibilityLabel="Clear all flock records"
             >
-              <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+              <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
                 <Path
                   d="M3 6H5H21M19 6V20C19 21.1046 18.1046 22 17 22H7C5.89543 22 5 21.1046 5 20V6M8 6V4C8 2.89543 8.89543 2 10 2H14C15.1046 2 16 2.89543 16 4V6"
                   stroke="#EF4444"
@@ -156,13 +170,137 @@ export default function HistoryScreen() {
           </View>
         ) : (
           <>
-            {/* 1. Herd Health Summary Stats Card */}
+            {/* 1. Redesigned Premium Segmented Breed Capsule */}
+            <View style={styles.segmentedCapsule}>
+              {/* Tab: All Flock */}
+              <TouchableOpacity
+                activeOpacity={0.82}
+                onPress={() => {
+                  try {
+                    Haptics.selectionAsync();
+                  } catch {}
+                  setAnimalFilter('All');
+                }}
+                style={[
+                  styles.segmentTab,
+                  animalFilter === 'All' && styles.segmentTabActive,
+                ]}
+              >
+                <Text style={styles.segmentEmoji}>🐾</Text>
+                <Text
+                  style={[
+                    styles.segmentLabel,
+                    animalFilter === 'All' && styles.segmentLabelActive,
+                  ]}
+                >
+                  All Herd
+                </Text>
+                <View
+                  style={[
+                    styles.segmentCountBadge,
+                    animalFilter === 'All' && styles.segmentCountBadgeActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.segmentCountText,
+                      animalFilter === 'All' && styles.segmentCountTextActive,
+                    ]}
+                  >
+                    {scanRecords.length}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Tab: Goats */}
+              <TouchableOpacity
+                activeOpacity={0.82}
+                onPress={() => {
+                  try {
+                    Haptics.selectionAsync();
+                  } catch {}
+                  setAnimalFilter('Goat');
+                }}
+                style={[
+                  styles.segmentTab,
+                  animalFilter === 'Goat' && styles.segmentTabActive,
+                ]}
+              >
+                <Text style={styles.segmentEmoji}>🐐</Text>
+                <Text
+                  style={[
+                    styles.segmentLabel,
+                    animalFilter === 'Goat' && styles.segmentLabelActive,
+                  ]}
+                >
+                  Goats
+                </Text>
+                <View
+                  style={[
+                    styles.segmentCountBadge,
+                    animalFilter === 'Goat' && styles.segmentCountBadgeActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.segmentCountText,
+                      animalFilter === 'Goat' && styles.segmentCountTextActive,
+                    ]}
+                  >
+                    {goatCount}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Tab: Sheep */}
+              <TouchableOpacity
+                activeOpacity={0.82}
+                onPress={() => {
+                  try {
+                    Haptics.selectionAsync();
+                  } catch {}
+                  setAnimalFilter('Sheep');
+                }}
+                style={[
+                  styles.segmentTab,
+                  animalFilter === 'Sheep' && styles.segmentTabActive,
+                ]}
+              >
+                <Text style={styles.segmentEmoji}>🐑</Text>
+                <Text
+                  style={[
+                    styles.segmentLabel,
+                    animalFilter === 'Sheep' && styles.segmentLabelActive,
+                  ]}
+                >
+                  Sheep
+                </Text>
+                <View
+                  style={[
+                    styles.segmentCountBadge,
+                    animalFilter === 'Sheep' && styles.segmentCountBadgeActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.segmentCountText,
+                      animalFilter === 'Sheep' && styles.segmentCountTextActive,
+                    ]}
+                  >
+                    {sheepCount}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* 2. Herd Health Summary Stats Card */}
             <FlockStatsCard
-              totalCount={scanRecords.length}
+              totalCount={totalInScope}
               healthyCount={healthyCount}
               warningCount={warningCount}
               criticalCount={criticalCount}
               selectedFilter={healthFilter}
+              selectedBreed={animalFilter}
               onSelectFilter={(f) => {
                 try {
                   Haptics.selectionAsync();
@@ -171,48 +309,15 @@ export default function HistoryScreen() {
               }}
             />
 
-            {/* 2. Animal Breed Filter Segmented Bar */}
-            <View style={styles.animalFilterRow}>
-              {(['All', 'Goat', 'Sheep'] as AnimalFilterType[]).map((animal) => {
-                const isSelected = animalFilter === animal;
-                const count =
-                  animal === 'All'
-                    ? scanRecords.length
-                    : scanRecords.filter((r) => r.animal === animal).length;
-                return (
-                  <TouchableOpacity
-                    key={animal}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      try {
-                        Haptics.selectionAsync();
-                      } catch {}
-                      setAnimalFilter(animal);
-                    }}
-                    style={[
-                      styles.animalFilterPill,
-                      isSelected && styles.animalFilterPillActive,
-                    ]}
-                  >
-                    <Text style={styles.animalFilterEmoji}>
-                      {animal === 'Goat' ? '🐐' : animal === 'Sheep' ? '🐑' : '🐾'}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.animalFilterText,
-                        isSelected && styles.animalFilterTextActive,
-                      ]}
-                    >
-                      {animal === 'All' ? 'All Breeds' : `${animal}s`} ({count})
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
             {/* 3. Section Title & Current Results Count */}
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Inspection History</Text>
+              <Text style={styles.sectionTitle}>
+                {animalFilter === 'All'
+                  ? 'All Herd Scans'
+                  : animalFilter === 'Goat'
+                  ? 'Caprine (Goat) Records'
+                  : 'Ovine (Sheep) Records'}
+              </Text>
               <Text style={styles.sectionCount}>
                 Showing {filteredRecords.length} of {scanRecords.length}
               </Text>
@@ -252,18 +357,17 @@ export default function HistoryScreen() {
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteModalState({ visible: false, mode: 'single', targetRecord: null })}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  screenContainer: {
     flex: 1,
     backgroundColor: '#FBFDF9',
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 16,
     paddingBottom: Platform.OS === 'ios' ? 120 : 100, // Safe clearance above floating tabs
   },
   headerRow: {
@@ -292,11 +396,11 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: '#FEF2F2',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 18,
+    paddingVertical: 7,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#FEE2E2',
-    marginTop: 4,
+    marginTop: 2,
   },
   clearAllText: {
     fontSize: 12,
@@ -314,39 +418,66 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#64748B',
   },
-  animalFilterRow: {
+
+  // Redesigned Segmented Breed Capsule
+  segmentedCapsule: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 20,
+    padding: 4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  animalFilterPill: {
+  segmentTab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 6,
     borderRadius: 16,
     gap: 6,
-    borderWidth: 1,
-    borderColor: 'transparent',
   },
-  animalFilterPillActive: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#10B981',
+  segmentTabActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  animalFilterEmoji: {
-    fontSize: 15,
+  segmentEmoji: {
+    fontSize: 14,
   },
-  animalFilterText: {
+  segmentLabel: {
     fontSize: 12,
     fontWeight: '700',
     color: '#64748B',
   },
-  animalFilterTextActive: {
+  segmentLabelActive: {
+    color: '#0F172A',
+    fontWeight: '800',
+  },
+  segmentCountBadge: {
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+  },
+  segmentCountBadgeActive: {
+    backgroundColor: '#ECFDF5',
+  },
+  segmentCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  segmentCountTextActive: {
     color: '#047857',
     fontWeight: '800',
   },
+
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -355,7 +486,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.3,

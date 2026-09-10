@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Alert,
   Platform,
   ScrollView,
   StatusBar,
@@ -9,290 +8,322 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import Svg, { Path } from 'react-native-svg';
-import { LanguageCard } from '@/components/onboarding';
+
 import { LanguageOption, SUPPORTED_LANGUAGES } from '@/constants/languages';
 import { useApp } from '@/context/AppContext';
 
 export default function SettingsScreen() {
-  const { selectedLanguage, setSelectedLanguage, resetOnboarding } = useApp();
-  const [playingLangId, setPlayingLangId] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
+  const { selectedLanguage, setSelectedLanguage } = useApp();
+  const [playingId, setPlayingId] = useState<string | null>(null);
 
-  const triggerHaptic = (type: 'selection' | 'success' = 'selection') => {
-    if (Platform.OS !== 'web') {
-      try {
-        if (type === 'success') {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } else {
-          Haptics.selectionAsync();
-        }
-      } catch {
-        // Fallback
-      }
-    }
+  const handleSelect = (lang: LanguageOption) => {
+    try {
+      Haptics.selectionAsync();
+    } catch {}
+    setSelectedLanguage(lang);
+    playGreeting(lang);
   };
 
-  const handlePlayLanguageAudio = (lang: LanguageOption) => {
+  const playGreeting = (lang: LanguageOption) => {
     try {
       Speech.stop();
-      setPlayingLangId(lang.id);
+      setPlayingId(lang.id);
       Speech.speak(lang.greeting, {
         language: lang.speechCode,
         pitch: 1.0,
         rate: 0.92,
-        onDone: () => setPlayingLangId(null),
-        onError: () => setPlayingLangId(null),
+        onDone: () => setPlayingId(null),
+        onError: () => setPlayingId(null),
       });
     } catch {
-      setPlayingLangId(null);
+      setPlayingId(null);
     }
   };
 
-  const handleSelectLanguage = (lang: LanguageOption) => {
-    setSelectedLanguage(lang);
-    handlePlayLanguageAudio(lang);
-  };
-
-  const handleResetOnboarding = () => {
-    triggerHaptic('success');
-    Speech.stop();
-    Alert.alert(
-      'Reset Onboarding',
-      'Would you like to replay the introduction and language setup slides?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Replay',
-          style: 'default',
-          onPress: () => {
-            resetOnboarding();
-          },
-        },
-      ]
-    );
-  };
-
   return (
-    <SafeAreaView edges={['top']} style={styles.safeArea}>
+    <View style={styles.screen}>
       <StatusBar barStyle="dark-content" backgroundColor="#FBFDF9" />
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + (Platform.OS === 'android' ? 24 : 18),
+          },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Screen Header */}
+        {/* Simple, Clean Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Settings</Text>
           <Text style={styles.subtitle}>
-            Manage your dialect, voice advice, and flock preferences.
+            Select the spoken voice language for camera guidance and diagnosis.
           </Text>
         </View>
 
-        {/* Section: Language Dialect Switcher */}
-        <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>Voice Dialect</Text>
-            <View style={styles.activePill}>
-              <Text style={styles.activePillText}>{selectedLanguage.name}</Text>
-            </View>
-          </View>
-          <Text style={styles.sectionDescription}>
-            Mbaala speaks veterinary advice in your selected language:
-          </Text>
+        {/* Section Label */}
+        <Text style={styles.sectionLabel}>SPOKEN DIALECT</Text>
 
-          <View style={styles.cardsContainer}>
-            {SUPPORTED_LANGUAGES.map((lang) => (
-              <LanguageCard
-                key={lang.id}
-                language={lang}
-                isSelected={selectedLanguage.id === lang.id}
-                isPlaying={playingLangId === lang.id}
-                onPlayAudio={handlePlayLanguageAudio}
-                onSelect={handleSelectLanguage}
-              />
-            ))}
-          </View>
+        {/* Minimalist Language List Card */}
+        <View style={styles.languageCard}>
+          {SUPPORTED_LANGUAGES.map((lang, index) => {
+            const isSelected = selectedLanguage.id === lang.id;
+            const isLast = index === SUPPORTED_LANGUAGES.length - 1;
+            const isPlaying = playingId === lang.id;
+
+            return (
+              <View key={lang.id}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => handleSelect(lang)}
+                  style={[
+                    styles.languageRow,
+                    isSelected && styles.languageRowSelected,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${lang.name} (${lang.nativeName})`}
+                >
+                  {/* Badge */}
+                  <View
+                    style={[
+                      styles.badgeCircle,
+                      isSelected && styles.badgeCircleSelected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.badgeText,
+                        isSelected && styles.badgeTextSelected,
+                      ]}
+                    >
+                      {lang.badge}
+                    </Text>
+                  </View>
+
+                  {/* Language Info */}
+                  <View style={styles.languageInfo}>
+                    <Text
+                      style={[
+                        styles.languageName,
+                        isSelected && styles.languageNameSelected,
+                      ]}
+                    >
+                      {lang.name}
+                    </Text>
+                    <Text style={styles.nativeScript}>
+                      {lang.nativeName}
+                    </Text>
+                  </View>
+
+                  {/* Right Actions: Preview Speaker + Checkmark */}
+                  <View style={styles.rightGroup}>
+                    {/* Audio Preview Icon Button */}
+                    <TouchableOpacity
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        try {
+                          Haptics.selectionAsync();
+                        } catch {}
+                        playGreeting(lang);
+                      }}
+                      style={[
+                        styles.speakerBtn,
+                        isPlaying && styles.speakerBtnPlaying,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Hear sample of ${lang.name}`}
+                    >
+                      <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                        <Path
+                          d="M11 5L6 9H2V15H6L11 19V5Z"
+                          fill={isPlaying ? '#10B981' : '#94A3B8'}
+                        />
+                        <Path
+                          d="M15.54 8.46C16.5 9.42 17 10.7 17 12C17 13.3 16.5 14.58 15.54 15.54"
+                          stroke={isPlaying ? '#10B981' : '#94A3B8'}
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                        />
+                      </Svg>
+                    </TouchableOpacity>
+
+                    {/* Selected Checkmark */}
+                    <View style={styles.checkSlot}>
+                      {isSelected && (
+                        <View style={styles.checkCircle}>
+                          <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+                            <Path
+                              d="M5 13L9 17L19 7"
+                              stroke="#FFFFFF"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </Svg>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
+                {!isLast && <View style={styles.rowDivider} />}
+              </View>
+            );
+          })}
         </View>
 
-        {/* Section: Inspection Tips */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Inspection Guide</Text>
-          <View style={styles.tipCard}>
-            <View style={styles.tipIconOrb}>
-              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M12 3V5M12 19V21M5 12H3M21 12H19M18.364 5.636L16.95 7.05M7.05 16.95L5.636 18.364M18.364 18.364L16.95 16.95M7.05 7.05L5.636 5.636"
-                  stroke="#10B981"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                />
-              </Svg>
-            </View>
-            <View style={styles.tipTextWrap}>
-              <Text style={styles.tipTitle}>Natural Daylight Recommended</Text>
-              <Text style={styles.tipBody}>
-                Inspect your animals outdoors under direct sunlight for the most accurate FAMACHA color reading.
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Section: Replay Onboarding (Developer / User testing) */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Preferences</Text>
-          <TouchableOpacity
-            activeOpacity={0.75}
-            onPress={handleResetOnboarding}
-            style={styles.replayButton}
-            accessibilityRole="button"
-          >
-            <Text style={styles.replayButtonText}>Replay Onboarding & Tutorial</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Version Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Mbaala App • Offline Livestock AI v1.0</Text>
-          <Text style={styles.footerSubtext}>Northern Ghana FAMACHA Anemia Detection</Text>
-        </View>
+        {/* Minimal Footer */}
+        <Text style={styles.footerNote}>
+          Mbaala v1.0 • 100% Offline
+        </Text>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  screen: {
     flex: 1,
     backgroundColor: '#FBFDF9',
   },
-  scrollContent: {
+  content: {
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 110, // Extra clearance for the floating bottom tab bar
+    paddingBottom: Platform.OS === 'ios' ? 120 : 100,
   },
   header: {
     marginBottom: 24,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '900',
+    fontSize: 24,
+    fontWeight: '700',
     color: '#0F172A',
-    letterSpacing: -0.6,
+    letterSpacing: -0.4,
     marginBottom: 6,
   },
   subtitle: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: '500',
     color: '#64748B',
+    fontWeight: '400',
   },
-  section: {
-    marginBottom: 28,
-  },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#1E293B',
-    letterSpacing: -0.3,
-  },
-  activePill: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  activePillText: {
-    color: '#047857',
+  sectionLabel: {
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+    paddingHorizontal: 4,
   },
-  sectionDescription: {
-    fontSize: 13,
-    color: '#64748B',
-    marginBottom: 14,
-  },
-  cardsContainer: {
-    width: '100%',
-  },
-  tipCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  languageCard: {
     backgroundColor: '#FFFFFF',
-    padding: 16,
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginTop: 10,
+    overflow: 'hidden',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
+    shadowRadius: 8,
+    elevation: 2,
+    marginBottom: 32,
   },
-  tipIconOrb: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#ECFDF5',
+  languageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+  languageRowSelected: {
+    backgroundColor: '#F8FCF9',
+  },
+  badgeCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
   },
-  tipTextWrap: {
+  badgeCircleSelected: {
+    backgroundColor: '#ECFDF5',
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: -0.2,
+  },
+  badgeTextSelected: {
+    color: '#047857',
+    fontWeight: '800',
+  },
+  languageInfo: {
     flex: 1,
   },
-  tipTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+  languageName: {
+    fontSize: 16,
+    fontWeight: '600',
     color: '#0F172A',
     marginBottom: 2,
   },
-  tipBody: {
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: '500',
-    color: '#64748B',
+  languageNameSelected: {
+    color: '#064E3B',
+    fontWeight: '700',
   },
-  replayButton: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 14,
-    borderRadius: 18,
+  nativeScript: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '400',
+  },
+  rightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  speakerBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginTop: 10,
   },
-  replayButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#059669',
+  speakerBtnPlaying: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#10B981',
   },
-  footer: {
+  checkSlot: {
+    width: 22,
+    height: 22,
     alignItems: 'center',
-    marginTop: 12,
-    marginBottom: 16,
+    justifyContent: 'center',
   },
-  footerText: {
+  checkCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginLeft: 68,
+  },
+  footerNote: {
     fontSize: 12,
-    fontWeight: '600',
     color: '#94A3B8',
-  },
-  footerSubtext: {
-    fontSize: 11,
+    textAlign: 'center',
     fontWeight: '500',
-    color: '#CBD5E1',
-    marginTop: 2,
   },
 });
